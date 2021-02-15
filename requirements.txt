@@ -1,0 +1,12 @@
+certifi==2020.12.5
+chardet==4.0.0
+idna==2.10
+progressbar==2.5
+PyQt5==5.15.2
+PyQt5-sip==12.8.1
+PyQt5Designer==5.14.1
+python-magic-bin==0.4.14
+requests==2.25.1
+selenium==3.141.0
+simple-image-download==0.4
+urllib3==1.26.3
