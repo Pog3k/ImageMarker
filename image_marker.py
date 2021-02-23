@@ -1,12 +1,14 @@
-from PyQt5 import QtWidgets
+import copy
+from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QPixmap,QCursor
+from PyQt5.QtGui import QPixmap, QCursor
 from PyQt5.QtCore import *
 from image_marker_ui import Ui_MainWindow
 
 import sys
 
-class DraggableBox( QGraphicsItem ):
+
+class DraggableBox(QGraphicsItem):
     """
     A simple QGraphicsItem that can be dragged around the scene.
     Of course, this behavior is easier to achieve if you simply use the default
@@ -18,35 +20,77 @@ class DraggableBox( QGraphicsItem ):
     """
 
     def __init__(self, rect, parent, *args, **kwargs):
-        #super( DraggableBox, self ).__init__( parent, *args, **kwargs )
+        # super( DraggableBox, self ).__init__( parent, *args, **kwargs )
         super(DraggableBox, self).__init__(parent, *args, **kwargs)
         self.setAcceptHoverEvents(True)
         self.offset = 20
+        self.min_size = 2 * self.offset
         self._rect = rect
+
         self.mouse_hover_event = False
         self.setZValue(1000)
-        #self.setFlags(QGraphicsItem.ItemIsSelectable|QGraphicsItem.ItemIsFocusable)
+        # self.setFlags(QGraphicsItem.ItemIsSelectable|QGraphicsItem.ItemIsFocusable)
 
-        self.rect_top_left  = QRectF(self._rect.topLeft().x(), self._rect.topLeft().y(),
-                                     self.offset, self.offset)
+        self.rect_top_left = QRectF(self._rect.topLeft().x(), self._rect.topLeft().y(), self.offset, self.offset)
+
+        self.rect_top_right = QRectF(self._rect.topRight().x(), self._rect.topRight().y(), -self.offset, self.offset)
+
+        self.rect_bottom_right = QRectF(self._rect.bottomRight().x(), self._rect.bottomRight().y(), -self.offset, -self.offset)
+
+        self.rect_bottom_left = QRectF(self._rect.bottomLeft().x(), self._rect.bottomLeft().y(), self.offset, -self.offset)
 
         self.rect_top_left = self.rect_top_left.normalized()
+        self.rect_top_left = self.rect_top_left.normalized()
+        self.rect_bottom_left = self.rect_bottom_left.normalized()
+        self.rect_bottom_right = self.rect_bottom_right.normalized()
 
+        self.select_box = QRectF(self.rect_top_left.bottomRight(), self.rect_bottom_right.topLeft())
+
+    def update_hooks(self):
+
+        self.rect_top_left.setX(self._rect.topLeft().x())
+        self.rect_top_left.setY(self._rect.topLeft().y())
+        self.rect_top_left.setWidth(self.offset)
+        self.rect_top_left.setHeight(self.offset)
+
+        self.rect_top_right.setX(self._rect.topRight().x() - self.offset)
+        self.rect_top_right.setY(self._rect.topRight().y())
+        self.rect_top_right.setWidth(self.offset)
+        self.rect_top_right.setHeight(self.offset)
+
+        self.rect_bottom_right.setX(self._rect.bottomRight().x() - self.offset)
+        self.rect_bottom_right.setY(self._rect.bottomRight().y() - self.offset)
+        self.rect_bottom_right.setWidth(self.offset)
+        self.rect_bottom_right.setHeight(self.offset)
+
+        self.rect_bottom_left.setX(self._rect.bottomLeft().x())
+        self.rect_bottom_left.setY(self._rect.bottomLeft().y() - self.offset)
+        self.rect_bottom_left.setWidth(self.offset)
+        self.rect_bottom_left.setHeight(self.offset)
+
+        self.select_box.setTopLeft(self.rect_top_left.bottomRight())
+        self.select_box.setBottomRight(self.rect_bottom_right.topLeft())
 
     def boundingRect(self):
         return self._rect
 
     def paint(self, painter, option, widget):
-        painter.drawText( QPointF(0,10), "DragableBox" )
+        painter.drawText(QPointF(0, 10), "DragableBox")
         if self.mouse_hover_event:
-            painter.drawRect( self.rect_top_left)
-        painter.drawRect( self.boundingRect() )
+            painter.drawRect(self.rect_top_left)
+            painter.drawRect(self.rect_top_right)
+            painter.drawRect(self.rect_bottom_right)
+            painter.drawRect(self.rect_bottom_left)
+        painter.drawRect(self.boundingRect())
+
+        painter.setPen(QtGui.QPen(Qt.red, 0, Qt.DashLine))
+        painter.drawRect(self.select_box)
 
         self.prepareGeometryChange()
 
     def hoverEnterEvent(self, event):
-        cursor = QCursor( Qt.OpenHandCursor )
-        QApplication.instance().setOverrideCursor( cursor )
+        cursor = QCursor(Qt.OpenHandCursor)
+        QApplication.instance().setOverrideCursor(cursor)
         self.mouse_hover_event = True
         self.prepareGeometryChange()
 
@@ -56,31 +100,59 @@ class DraggableBox( QGraphicsItem ):
         self.prepareGeometryChange()
 
     def mouseMoveEvent(self, event):
-        # new_pos = event.scenePos()
-        # self.setPos( new_pos )
 
-        delta = QPointF(event.scenePos() - self.oldPos)
-        self.setPos(self.x() + delta.x(), self.y() + delta.y())
-        self.oldPos = event.scenePos()
+        if self.mousePressArea == "topleft":
+            new_top_left = self.rectPress.topLeft() - (self.mousePressPos - event.scenePos())
+
+            size = self.rectPress.bottomRight() - new_top_left
+
+            if size.x() >= self.min_size:
+
+                self._rect.setTopLeft(
+                    QPointF(self.rectPress.topLeft().x() - (self.mousePressPos.x() - event.scenePos().x()), self._rect.y())
+                )
+
+            if size.y() >= self.min_size:
+                self._rect.setTopLeft(
+                    QPointF(self._rect.x(), self.rectPress.topLeft().y() - (self.mousePressPos.y() - event.scenePos().y()))
+                )
+
+            self.update_hooks()
+            self.prepareGeometryChange()
+            # pass
+        else:
+            delta = QPointF(event.scenePos() - self.oldPos)
+            self.setPos(self.x() + delta.x(), self.y() + delta.y())
+            self.oldPos = event.scenePos()
 
     # We must override these or else the default implementation prevents
     #  the mouseMoveEvent() override from working.
     def mousePressEvent(self, event):
 
         self.oldPos = event.scenePos()
+        self.mousePressPos = event.scenePos()
+        self.rectPress = copy.deepcopy(self._rect)
+        self.mouseIsPressed = True
 
-    def mouseReleaseEvent(self, event): pass
+        if self.rect_top_left.contains(event.pos()):
+
+            self.mousePressArea = "topleft"
+        else:
+            self.mousePressArea = None
+
+    def mouseReleaseEvent(self, event):
+        pass
+
 
 class BoxResizable(QGraphicsRectItem):
-    def __init__(self, rect, parent = None,*args, **kwargs):
-        QGraphicsRectItem.__init__(self, rect, parent,*args, **kwargs)
+    def __init__(self, rect, parent=None, *args, **kwargs):
+        QGraphicsRectItem.__init__(self, rect, parent, *args, **kwargs)
 
         self.setAcceptHoverEvents(True)
 
-
     def paint(self, painter, option, widget):
-        painter.drawText( QPointF(0,10), "Hiyaaa" )
-       # painter.drawRect( self.boundingRect() )
+        painter.drawText(QPointF(0, 10), "Hiyaaa")
+        # painter.drawRect( self.boundingRect() )
         super().paint(painter, option, widget)
 
     # def boundingRect(self):
@@ -89,29 +161,35 @@ class BoxResizable(QGraphicsRectItem):
     #     return self.rect()
 
     def hoverEnterEvent(self, event):
-        cursor = QCursor( Qt.OpenHandCursor )
-        QApplication.instance().setOverrideCursor( cursor )
+        cursor = QCursor(Qt.OpenHandCursor)
+        QApplication.instance().setOverrideCursor(cursor)
 
     def hoverLeaveEvent(self, event):
         QApplication.instance().restoreOverrideCursor()
 
     def mouseMoveEvent(self, event):
         new_pos = event.scenePos()
-        self.setPos( new_pos )
+        self.setPos(new_pos)
 
     def mouseMoveEvent(self, event):
         new_pos = event.scenePos()
-        self.setPos( new_pos )
+        self.setPos(new_pos)
+
     # We must override these or else the default implementation prevents
     #  the mouseMoveEvent() override from working.
-    def mousePressEvent(self, event): pass
-    def mouseReleaseEvent(self, event): pass
+    def mousePressEvent(self, event):
+        pass
+
+    def mouseReleaseEvent(self, event):
+        pass
+
 
 class ResizableRubberBand(QtWidgets.QWidget):
     """Wrapper to make QRubberBand mouse-resizable using QSizeGrip
 
     Source: http://stackoverflow.com/a/19067132/435253
     """
+
     def __init__(self, parent=None):
         super(ResizableRubberBand, self).__init__(parent)
 
@@ -132,17 +210,17 @@ class ResizableRubberBand(QtWidgets.QWidget):
         self.show()
 
     def mousePressEvent(self, event):
-        '''
-            Mouse is pressed. If selection is visible either set dragging mode (if close to border) or hide selection.
-            If selection is not visible make it visible and start at this point.
-        '''
+        """
+        Mouse is pressed. If selection is visible either set dragging mode (if close to border) or hide selection.
+        If selection is not visible make it visible and start at this point.
+        """
         self.oldPos = event.globalPos()
         if event.button() == Qt.LeftButton:
             pass
-            #print("hello")
+            # print("hello")
 
     def mouseMoveEvent(self, event):
-        #self.rubberband.move(event.screenPos())
+        # self.rubberband.move(event.screenPos())
         # orig_cursor_position = event.las  lastPos()
         # updated_cursor_position = event.Pos()
 
@@ -156,10 +234,9 @@ class ResizableRubberBand(QtWidgets.QWidget):
         self.move(self.x() + delta.x(), self.y() + delta.y())
         self.oldPos = event.globalPos()
 
-
-
     def resizeEvent(self, event):
         self.rubberband.resize(self.size())
+
 
 class ApplicationWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -177,24 +254,26 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         # self.ui.ImageViewer.setPixmap(im)
 
         self.image_scene = QGraphicsScene(self.ui.ImageViewer)
-        self.ui.ImageViewer.setScene(self.image_scene )
+        self.ui.ImageViewer.setScene(self.image_scene)
 
-        self.box = BoxResizable( rect=QRectF(0, 0, 50, 50), parent = None)
+        self.box = BoxResizable(rect=QRectF(0, 0, 50, 50), parent=None)
 
         self.image_scene.addItem(self.box)
-        dragbox = DraggableBox( QRectF( 0, 0, 150, 100),None)
-        dragbox.setPos( 10,20 )
-        #box.setRotation(45)
+        dragbox = DraggableBox(QRectF(0, 0, 150, 100), None)
+        dragbox.setPos(10, 20)
+        # box.setRotation(45)
         self.image_scene.addItem(dragbox)
-        #self.box.move(150, 150)
-        #self.box.resize(80, 80)
-        #self.box.setMinimumSize(30, 30)
+        # self.box.move(150, 150)
+        # self.box.resize(80, 80)
+        # self.box.setMinimumSize(30, 30)
+
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
     application = ApplicationWindow()
     application.show()
     sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     main()
