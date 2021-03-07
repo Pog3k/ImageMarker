@@ -81,7 +81,7 @@ class DraggableBox(QGraphicsItem):
             painter.drawRect(self.rect_top_right)
             painter.drawRect(self.rect_bottom_right)
             painter.drawRect(self.rect_bottom_left)
-        painter.drawRect(self.boundingRect())
+            painter.drawRect(self.boundingRect())
 
         painter.setPen(QtGui.QPen(Qt.red, 0, Qt.DashLine))
         painter.drawRect(self.select_box)
@@ -89,42 +89,106 @@ class DraggableBox(QGraphicsItem):
         self.prepareGeometryChange()
 
     def hoverEnterEvent(self, event):
-        cursor = QCursor(Qt.OpenHandCursor)
-        QApplication.instance().setOverrideCursor(cursor)
+
+
+
         self.mouse_hover_event = True
-        self.prepareGeometryChange()
+       #self.prepareGeometryChange()
+
+    def hoverMoveEvent(self, event: 'QGraphicsSceneHoverEvent') -> None:
+
+        if self.rect_top_left.contains(event.pos()) or self.rect_bottom_right.contains(event.pos()):
+            cursor = QCursor(Qt.SizeFDiagCursor)
+        elif self.rect_top_right.contains(event.pos()) or self.rect_bottom_left.contains(event.pos()):
+            cursor = QCursor(Qt.SizeBDiagCursor)
+
+
+        else:
+            cursor = QCursor(Qt.OpenHandCursor)
+        QApplication.instance().setOverrideCursor(cursor)
+        return super().hoverMoveEvent(event)
+
 
     def hoverLeaveEvent(self, event):
         self.mouse_hover_event = False
-        QApplication.instance().restoreOverrideCursor()
-        self.prepareGeometryChange()
+        QApplication.instance().setOverrideCursor(Qt.ArrowCursor)
+
+        #self.prepareGeometryChange()
 
     def mouseMoveEvent(self, event):
 
-        if self.mousePressArea == "topleft":
-            new_top_left = self.rectPress.topLeft() - (self.mousePressPos - event.scenePos())
+        mouse_delta = (self.mousePressPos - event.scenePos())
+
+        if self.mousePressArea == "topLeft":
+            new_top_left = self.rectPress.topLeft() - mouse_delta
 
             size = self.rectPress.bottomRight() - new_top_left
 
             if size.x() >= self.min_size:
 
                 self._rect.setTopLeft(
-                    QPointF(self.rectPress.topLeft().x() - (self.mousePressPos.x() - event.scenePos().x()), self._rect.y())
+                    QPointF(self.rectPress.topLeft().x() - mouse_delta.x(), self._rect.y())
                 )
 
             if size.y() >= self.min_size:
                 self._rect.setTopLeft(
-                    QPointF(self._rect.x(), self.rectPress.topLeft().y() - (self.mousePressPos.y() - event.scenePos().y()))
+                    QPointF(self._rect.x(), self.rectPress.topLeft().y() - mouse_delta.y())
                 )
 
-            self.update_hooks()
-            self.prepareGeometryChange()
-            # pass
+        elif self.mousePressArea == "topRight":
+            new_top_right = self.rectPress.topRight() - mouse_delta
+
+            size = self.rectPress.bottomLeft() - new_top_right
+
+            if size.x() <= -self.min_size:
+
+                self._rect.setTopRight(
+                    QPointF(self.rectPress.topRight().x() - mouse_delta.x(), self._rect.y())
+                )
+
+            if size.y() >= self.min_size:
+
+                self._rect.setTopRight(
+                    QPointF(self._rect.x()+self._rect.width(),   self.rectPress.topRight().y() - mouse_delta.y())
+                )
+
+
+        elif self.mousePressArea == "bottomRight":
+            new_bot_right = self.rectPress.bottomRight() - mouse_delta
+            size = self.rectPress.topLeft() - new_bot_right
+            if size.x() <= -self.min_size:
+                self._rect.setBottomRight(
+                    QPointF(self.rectPress.bottomRight().x() - mouse_delta.x(), self._rect.y()+self._rect.height())
+                )
+
+            if -size.y() >= self.min_size:
+
+                self._rect.setBottomRight(
+                    QPointF(self._rect.x()+self._rect.width(),   self.rectPress.bottomRight().y() - mouse_delta.y())
+                )
+
+        elif self.mousePressArea == "bottomLeft":
+            new_bot_left = self.rectPress.bottomLeft() - mouse_delta
+            size = self.rectPress.topRight() - new_bot_left
+            if size.x() >= self.min_size:
+                self._rect.setBottomLeft(
+                    QPointF(self.rectPress.bottomLeft().x() - mouse_delta.x(), self._rect.y()+self._rect.height())
+                )
+
+            if -size.y() >= self.min_size:
+
+                self._rect.setBottomLeft(
+                    QPointF(self._rect.x(),   self.rectPress.bottomLeft().y() - mouse_delta.y())
+                )
+
         else:
+            #move element
             delta = QPointF(event.scenePos() - self.oldPos)
             self.setPos(self.x() + delta.x(), self.y() + delta.y())
             self.oldPos = event.scenePos()
 
+        self.update_hooks()
+        self.prepareGeometryChange()
     # We must override these or else the default implementation prevents
     #  the mouseMoveEvent() override from working.
     def mousePressEvent(self, event):
@@ -135,8 +199,13 @@ class DraggableBox(QGraphicsItem):
         self.mouseIsPressed = True
 
         if self.rect_top_left.contains(event.pos()):
-
-            self.mousePressArea = "topleft"
+            self.mousePressArea = "topLeft"
+        elif self.rect_top_right.contains(event.pos()):
+            self.mousePressArea = "topRight"
+        elif self.rect_bottom_left.contains(event.pos()):
+            self.mousePressArea = "bottomLeft"
+        elif self.rect_bottom_right.contains(event.pos()):
+            self.mousePressArea = "bottomRight"
         else:
             self.mousePressArea = None
 
